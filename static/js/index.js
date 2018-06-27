@@ -1,88 +1,72 @@
+const socket = new WebSocket('wss://ropsten.infura.io/ws/g97D5zS7v5gxGRgzQV60');
 
-var eth_id = 1;
+var $textTokenEl = '#text_token';
+var $textTokenTotalEth = '#text_total_eth';
 
-function eth(method,params) {
+let requestId = 1;
+let fromBlock = 'earliest';
+let toBlock = 'latest';
+let topics = ['0x19287f35bf9ce71d59481bf0e504fc7f02e898d429c85d11f5276bc24bd903c3'];
+let address = '0x9F56ec099d988b1016CcE7f14c002b0943d635E5';
 
-    var settings = {
-        'async': true,
-        'crossDomain': true,
-        'url': 'https://mainnet.infura.io',
-        'method': 'POST',
-        'headers': {},
-        "data": '{"jsonrpc":"2.0","id":'+(eth_id++)+',"method":"'+method+'","params":'+params+'}'
-      }
-        
-      $.ajax(settings).done(function(response) {
-        console.log(response);
-        $('#text_total_token').text(response.result);
-      });
-
+socket.onopen = function() {
+  socketSendMessage();
 }
 
-var page = (function() {
-    var rdy = (function() {
+socket.onmessage = function(message){
+  var data = JSON.parse(message.data);
+  var result = data.result;
 
-        // TODO Get data from Infura
+  if (!result)
+    return
 
-        eth('eth_blockNumber','[]');
-        var refreshId = setInterval(function() {
-            eth('eth_blockNumber','[]');
-        }, 10000);
+  var firstLog = result[result.length - 1];
+  fromBlock = firstLog.blockNumber;
+  values = parseHex2Dig(firstLog.data);
 
-        // var settings = {
-        //     "async": true,
-        //     "crossDomain": true,
-        //     "url": "https://mainnet.infura.io",
-        //     "method": "POST",
-        //     "headers": {},
-        //     "data": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_newFilter\",\"params\":[]}"
-        //     // "data": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\",\"params\":[]}"
-        //   }
-          
-        //   $.ajax(settings).done(function(response) {
-        //     console.log(response);
-        //     // $('#text_total_token').text(response.result);
-        //   });
+  var neurealTokens = values[0];
+  var totalEth = values[1];
 
+  if (neurealTokens > 0){
+    neurealTokens = neurealTokens / 10 ** 18;
+  }
 
-        // var refreshId = setInterval(function() {
-        //     var r = (-0.5)+(Math.random()*(1000.99));
-        //     $('#img-container').load('images/gallery/best/random.php?'+r);
-        // }, 5000);
+  if (totalEth > 0){
+    totalEth = totalEth / 10 ** 18;
+  }
 
-        // $('#text_total_token').text('text_total_token Testing!!!');
-        // $('#text_total_eth').text('text_total_eth Testing!!!');
-        
+  $($textTokenEl).text(parseInt(neurealTokens));
+  $($textTokenTotalEth).text(totalEth.toFixed(3));
+}
 
-        // $('#text_total_token').text((eth_id++));
-        // var refreshId = setInterval(function() {
-        //     $('#text_total_token').text((eth_id++));
-        // }, 10000);
+var dataFetcher;
 
+socket.onclose = function(){
+  clearInterval(dataFetcher);
+}
 
-        // $("#text-status").load("/webhook_activate");
+dataFetcher = setInterval(function() {
+  socketSendMessage();
+}, 10000);
 
-        // console.log($('#modal_disclaimer').css('display'));
+function socketSendMessage(){
+  socket.send(JSON.stringify({
+    "jsonrpc": "2.0",
+    "id": requestId,
+    "method": "eth_getLogs",
+    "params": [{fromBlock, toBlock, topics, address}]
+  }));
+  requestId ++;
+}
 
-        // $("#button_show_contract").click(function() {
-        //     $('#modal_contract').toggleClass('w3-show');
-        // });
+function parseHex2Dig(data) {
+  let values = data.replace('0x', '');
+  if (!values)
+    return [];
 
-        // $("#button_risks_agree").click(function() {
-        //     $('#modal_risks').css('display','none');
-        // });
-        // $("#button_disclaimer_agree").click(function() {
-        //     $('#modal_disclaimer').css('display','none');
-        //     $('#modal_risks').css('display','block');
-        // });
-        // $('#modal_disclaimer').css('display','block');
-        
-    });
-    return { rdy: rdy };
-})();
-$(document).ready(page.rdy);
-
-// $(window).on('load', function() {
-//     console.log('OnLoad');
-//     // everything on page loaded
-// });
+  values = values.match(/.{1,64}/g);
+  values.forEach((value, index) => {
+    values[index] = parseInt(value, 16);
+  });
+  return values;
+}
